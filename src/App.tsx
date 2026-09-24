@@ -1,158 +1,109 @@
+import { useMemo, useState } from "react";
 import "./styles.css";
-
-const project = {
-  "id": "hxwl-11",
-  "port": 5111,
-  "title": "眼科验光记录",
-  "subtitle": "视力、屈光参数与复查处方对比",
-  "stack": "React + Vite + TypeScript + CSS",
-  "theme": [
-    "#2563eb",
-    "#059669",
-    "#dc2626"
-  ],
-  "domain": "眼视光",
-  "users": [
-    "验光师",
-    "门店顾问",
-    "复查医生"
-  ],
-  "metrics": [
-    "近视进展",
-    "散光变化",
-    "复查提醒",
-    "处方数量"
-  ],
-  "filters": [
-    "儿童",
-    "成人",
-    "渐进片",
-    "角膜塑形镜"
-  ],
-  "fields": [
-    "裸眼视力",
-    "矫正视力",
-    "球镜",
-    "柱镜",
-    "轴位",
-    "瞳距",
-    "角膜曲率"
-  ],
-  "records": [
-    [
-      "Patient-032",
-      "儿童近视",
-      "复查",
-      "右眼-2.75DS，轴位180"
-    ],
-    [
-      "Patient-081",
-      "渐进片",
-      "初配",
-      "ADD +1.50，瞳高待确认"
-    ],
-    [
-      "Patient-144",
-      "散光",
-      "复查",
-      "柱镜变化0.50D"
-    ]
-  ]
-};
-
-const statusColors = ["status-ok", "status-watch", "status-danger"];
-
-function MetricCard({ label, value, index }: { label: string; value: string; index: number }) {
-  return (
-    <article className="metric-card">
-      <span>{label}</span>
-      <strong>{value}</strong>
-      <i className={statusColors[index % statusColors.length]} />
-    </article>
-  );
-}
+import EntryForm from "./components/EntryForm";
+import LedgerList from "./components/LedgerList";
+import { useLedger } from "./lib/useLedger";
 
 function App() {
-  const values = project.metrics.map((metric: string, index: number) => {
-    const base = [84, 12, 31, 7][index % 4];
-    return String(base + index * 3);
-  });
+  const { entries, selected, select, saveDraft, openNewVersion, today } = useLedger();
+  const [formKey, setFormKey] = useState(0);
+  const [showNew, setShowNew] = useState(false);
+
+  const stats = useMemo(() => {
+    const change = entries.filter((e) => e.evaluation.verdict === "change").length;
+    const unknown = entries.filter((e) => e.evaluation.verdict === "unknown").length;
+    const pending = entries.filter((e) => e.disposition === "pending").length;
+    const overdue = entries.filter(
+      (e) => e.disposition === "keep" && e.reviewDate !== "" && e.reviewDate < today
+    ).length;
+    return { total: entries.length, change, unknown, pending, overdue };
+  }, [entries, today]);
+
+  const metricCards = [
+    { label: "建议换镜", value: stats.change, cls: "status-danger" },
+    { label: "无法判断（含缺项）", value: stats.unknown, cls: "status-watch" },
+    { label: "待核对", value: stats.pending, cls: "status-ok" },
+    { label: "复查逾期", value: stats.overdue, cls: "status-watch" },
+  ];
+
+  const startNew = () => {
+    setFormKey((k) => k + 1);
+    setShowNew(true);
+    select(null);
+  };
 
   return (
     <main className="app-shell">
       <section className="hero">
         <div>
-          <p className="eyebrow">{project.id} · port {project.port}</p>
-          <h1>{project.title}</h1>
-          <p className="subtitle">{project.subtitle}</p>
+          <p className="eyebrow">hxwl-11 · 验光核对台账</p>
+          <h1>旧镜度数 × 本次验光 核对台账</h1>
+          <p className="subtitle">
+            旧镜度数与本次验光分开记录：球镜或柱镜相差 ≥0.50D，或原柱镜 ≥0.50D 且轴位差
+            &gt;15° 时给出换镜建议并保留命中项；缺项判为无法判断。暂不换镜登记复查日期，确认换镜后核对与处方固定，后续调整新建版本。
+          </p>
         </div>
-        <div className="stack-card">
-          <span>技术栈</span>
-          <strong>{project.stack}</strong>
+        <div className="stack-card rule-card">
+          <span>换镜判定规则</span>
+          <strong>① 球镜差 ≥ 0.50D</strong>
+          <strong>② 柱镜差 ≥ 0.50D</strong>
+          <strong>③ 原柱镜 ≥ 0.50D 且轴位差 &gt; 15°</strong>
         </div>
       </section>
 
       <section className="metrics-grid">
-        {project.metrics.map((metric: string, index: number) => (
-          <MetricCard key={metric} label={metric} value={values[index]} index={index} />
+        {metricCards.map((m) => (
+          <article key={m.label} className="metric-card">
+            <span>{m.label}</span>
+            <strong>{m.value}</strong>
+            <i className={m.cls} />
+          </article>
         ))}
       </section>
 
-      <section className="workspace">
-        <aside className="panel narrow">
-          <h2>角色</h2>
-          <div className="chips">
-            {project.users.map((user: string) => (
-              <span key={user}>{user}</span>
-            ))}
-          </div>
-          <h2>筛选</h2>
-          <div className="chips muted">
-            {project.filters.map((filter: string) => (
-              <button key={filter}>{filter}</button>
-            ))}
-          </div>
-        </aside>
+      <div className="toolbar">
+        <button className="primary-action" onClick={startNew}>
+          + 新增核对
+        </button>
+        {showNew && (
+          <button
+            onClick={() => {
+              setShowNew(false);
+              setFormKey((k) => k + 1);
+            }}
+          >
+            收起录入
+          </button>
+        )}
+      </div>
 
-        <section className="panel">
-          <div className="section-heading">
-            <div>
-              <p>{project.domain}</p>
-              <h2>记录字段</h2>
-            </div>
-            <button className="primary-action">新增记录</button>
-          </div>
-          <div className="field-grid">
-            {project.fields.map((field: string) => (
-              <label key={field}>
-                <span>{field}</span>
-                <input placeholder={"填写" + field} />
-              </label>
-            ))}
-          </div>
-        </section>
-      </section>
+      {(showNew || selected) && (
+        <EntryForm
+          key={selected ? `e-${selected.id}` : `new-${formKey}`}
+          base={selected}
+          today={today}
+          onSave={saveDraft}
+          onNewVersion={(b) => {
+            openNewVersion(b);
+          }}
+          onCancel={() => {
+            setShowNew(false);
+            select(null);
+            setFormKey((k) => k + 1);
+          }}
+        />
+      )}
 
-      <section className="records panel">
-        <div className="section-heading">
-          <div>
-            <p>示例数据</p>
-            <h2>近期记录</h2>
-          </div>
-          <button>导出摘要</button>
-        </div>
-        <div className="record-list">
-          {project.records.map((record: string[], index: number) => (
-            <article key={record.join("-")} className="record-card">
-              <div className="record-index">{String(index + 1).padStart(2, "0")}</div>
-              <div>
-                <h3>{record[0]}</h3>
-                <p>{record.slice(1).join(" · ")}</p>
-              </div>
-            </article>
-          ))}
-        </div>
-      </section>
+      <LedgerList
+        entries={entries}
+        selectedId={selected?.id ?? null}
+        today={today}
+        onSelect={(id) => {
+          setShowNew(false);
+          select(id);
+        }}
+        onNewVersion={(b) => openNewVersion(b)}
+      />
     </main>
   );
 }
